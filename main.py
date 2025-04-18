@@ -14,7 +14,7 @@ import tempfile
 # -----------------
 
 # nltk.download('punkt_tab')
-nltk.download('averaged_perceptron_tagger')
+# nltk.download('averaged_perceptron_tagger')
 nltk.download('punkt')
 
 # -----------------
