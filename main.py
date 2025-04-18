@@ -13,7 +13,7 @@ import tempfile
 
 # -----------------
 
-nltk.download('punkt_tab')
+# nltk.download('punkt_tab')
 nltk.download('averaged_perceptron_tagger')
 nltk.download('punkt')
 
@@ -25,8 +25,8 @@ load_dotenv()
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_credentials=True,
     allow_origins=["https://askfrompdf.netlify.app/"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
 )
