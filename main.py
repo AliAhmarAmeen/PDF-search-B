@@ -26,7 +26,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=["*"],
+    allow_origins=["https://askfrompdf.netlify.app/"],
     allow_methods=["*"],
     allow_headers=["*"]
 )
@@ -102,6 +102,12 @@ def expand_answer(answer: str, context: str) -> str:
     return ' '.join([sent for sent in answer_sentences if not (sent in seen or seen.add(sent))][:4])
 
 # ---------------------------------
+
+@app.get("/")
+def health_check():
+    return {"status": "App is running"}
+
+
 
 # Now time to Find answer from PDF
 @app.post("/ask")
