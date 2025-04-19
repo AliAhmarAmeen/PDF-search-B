@@ -27,24 +27,31 @@ print("Starting application initialization...")  # Add this for debug
 def setup_nltk():
     try:
         print("Setting up NLTK...")
+
+        # Force absolute nltk_data path
         nltk_data_path = os.path.join(os.getcwd(), 'nltk_data')
         os.makedirs(nltk_data_path, exist_ok=True)
-        
-        if nltk_data_path not in nltk.data.path:  
-             nltk.data.path.insert(0, nltk_data_path)
-        
-        resources = ['punkt', 'averaged_perceptron_tagger']
-        for resource in resources:
+
+        # Override NLTK's search path
+        nltk.data.path = [nltk_data_path] + nltk.data.path
+
+        # Download required packages
+        required_resources = [
+            'punkt',
+            'averaged_perceptron_tagger',
+            'punkt_tab'  # 👈 add this explicitly
+        ]
+
+        for resource in required_resources:
             try:
-                nltk.data.find(f'tokenizers/{resource}' if resource == 'punkt' else f'taggers/{resource}')
-                print(f"NLTK {resource} data already available")
+                nltk.data.find(f'tokenizers/{resource}' if 'punkt' in resource else f'taggers/{resource}')
+                print(f"NLTK {resource} already available.")
             except LookupError:
-                try:
-                    nltk.download(resource, download_dir=nltk_data_path, quiet=True)
-                    print(f"NLTK {resource} data downloaded successfully")
-                except Exception as e:
-                    print(f"Could not download NLTK {resource}: {e}")
-        print("NLTK setup complete")
+                print(f"Downloading NLTK resource: {resource}")
+                nltk.download(resource, download_dir=nltk_data_path)
+                print(f"Downloaded: {resource}")
+
+        print("NLTK setup complete.\n")
     except Exception as e:
         print(f"Error in NLTK setup: {e}")
         raise e
