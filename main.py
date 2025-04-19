@@ -60,8 +60,8 @@ app = FastAPI()
 print("Setting up CORS middleware...")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://askfrompdf.netlify.app"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    # allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
