@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import pdfplumber
 from nltk.tokenize import sent_tokenize
 import nltk
+nltk.data.path = [os.path.join(os.getcwd(), 'nltk_data')] + nltk.data.path
 from dotenv import load_dotenv
 import tempfile
 import logging
@@ -29,8 +30,8 @@ def setup_nltk():
         nltk_data_path = os.path.join(os.getcwd(), 'nltk_data')
         os.makedirs(nltk_data_path, exist_ok=True)
         
-        if nltk_data_path not in nltk.data.path:
-            nltk.data.path.append(nltk_data_path)
+        if nltk_data_path not in nltk.data.path:  
+             nltk.data.path.insert(0, nltk_data_path)
         
         resources = ['punkt', 'averaged_perceptron_tagger']
         for resource in resources:
