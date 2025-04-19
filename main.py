@@ -7,17 +7,39 @@ from fastapi.middleware.cors import CORSMiddleware
 import pdfplumber
 from nltk.tokenize import sent_tokenize
 import nltk
-nltk.download('punkt')
 from dotenv import load_dotenv
 import tempfile
+import logging
 
-# -----------------
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# nltk.download('punkt_tab')
-# nltk.download('averaged_perceptron_tagger')
-nltk.download('punkt')
+# NLTK setup function
+def setup_nltk():
+    # Set NLTK data path to a writable directory
+    nltk_data_path = os.path.join(os.getcwd(), 'nltk_data')
+    os.makedirs(nltk_data_path, exist_ok=True)
+    
+    # Add to NLTK's data path
+    if nltk_data_path not in nltk.data.path:
+        nltk.data.path.append(nltk_data_path)
+    
+    # Download required NLTK data
+    resources = ['punkt', 'averaged_perceptron_tagger']
+    for resource in resources:
+        try:
+            nltk.data.find(f'tokenizers/{resource}' if resource == 'punkt' else f'taggers/{resource}')
+            logger.info(f"NLTK {resource} data already available")
+        except LookupError:
+            try:
+                nltk.download(resource, download_dir=nltk_data_path, quiet=True)
+                logger.info(f"NLTK {resource} data downloaded successfully")
+            except Exception as e:
+                logger.warning(f"Could not download NLTK {resource}: {e}")
 
-# -----------------
+# Run NLTK setup
+setup_nltk()
 
 load_dotenv()
 
@@ -25,7 +47,7 @@ load_dotenv()
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://askfrompdf.netlify.app/"],
+    allow_origins=["https://askfrompdf.netlify.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"]
@@ -107,8 +129,6 @@ def expand_answer(answer: str, context: str) -> str:
 def health_check():
     return {"status": "App is running"}
 
-
-
 # Now time to Find answer from PDF
 @app.post("/ask")
 async def ask_question(payload: dict = Body(...)):
@@ -127,6 +147,7 @@ async def ask_question(payload: dict = Body(...)):
             "confidence": round(score, 4)
         }
     except Exception as e:
+        logger.error(f"Error processing question: {str(e)}")
         raise HTTPException(500, f"Error processing question: {str(e)}")
 
 # Extracting text from Given PDF to TEMP pdf
@@ -153,8 +174,8 @@ async def upload_pdf(file: UploadFile = File(...)):
         return {"text": text.strip()}
     except Exception as e:
         os.unlink(temp_pdf_path)
+        logger.error(f"Error processing PDF: {str(e)}")
         raise HTTPException(500, f"Error processing PDF: {str(e)}")
     finally:
         if os.path.exists(temp_pdf_path):
             os.unlink(temp_pdf_path)
-    
