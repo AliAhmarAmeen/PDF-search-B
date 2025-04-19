@@ -10,9 +10,14 @@ import nltk
 from dotenv import load_dotenv
 import tempfile
 import logging
+import sys
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging properly for Railway
+logging.basicConfig(
+    stream=sys.stdout,
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # NLTK setup function
@@ -30,27 +35,29 @@ def setup_nltk():
     for resource in resources:
         try:
             nltk.data.find(f'tokenizers/{resource}' if resource == 'punkt' else f'taggers/{resource}')
-            logger.info(f"NLTK {resource} data already available")
+            print(f"NLTK {resource} data already available")
         except LookupError:
             try:
                 nltk.download(resource, download_dir=nltk_data_path, quiet=True)
-                logger.info(f"NLTK {resource} data downloaded successfully")
+                print(f"NLTK {resource} data downloaded successfully")
             except Exception as e:
-                logger.warning(f"Could not download NLTK {resource}: {e}")
+                print(f"Could not download NLTK {resource}: {e}")
 
 # Run NLTK setup
 setup_nltk()
 
 load_dotenv()
 
-# Cross Origin Policy
+# Cross Origin Policy - Fixed configuration
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://askfrompdf.netlify.app"],
+    allow_origins=["https://askfrompdf.netlify.app", "http://localhost:3000", "http://localhost:8000"],  # Allow specific origins
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
+    allow_methods=["GET", "POST", "OPTIONS"],  # Be explicit about allowed methods
+    allow_headers=["*"],  # Allow all headers
+    expose_headers=["*"],  # Expose all headers to the frontend
+    max_age=3600,  # Cache preflight requests
 )
 
 # -----------Model API's ------------------------------------------
@@ -59,30 +66,38 @@ API_HEADERS = {"Authorization": f"Bearer {HF_API_TOKEN}"}
 
 # Helper functions for API calls
 def hf_embeddings_api(texts: List[str]) -> List[List[float]]:
-    response = requests.post(
-        "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
-        headers=API_HEADERS,
-        json={"inputs": texts, "options": {"wait_for_model": True}}
-    )
-    if response.status_code != 200:
-        raise HTTPException(500, "Embedding API error")
-    return response.json()
+    try:
+        response = requests.post(
+            "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2",
+            headers=API_HEADERS,
+            json={"inputs": texts, "options": {"wait_for_model": True}}
+        )
+        if response.status_code != 200:
+            raise HTTPException(500, f"Embedding API error: {response.text}")
+        return response.json()
+    except Exception as e:
+        logger.error(f"Embedding API error: {str(e)}")
+        raise HTTPException(500, f"Embedding API error: {str(e)}")
 
 def hf_qa_api(context: str, question: str) -> dict:
-    response = requests.post(
-        "https://api-inference.huggingface.co/models/bert-large-uncased-whole-word-masking-finetuned-squad",
-        headers=API_HEADERS,
-        json={
-            "inputs": {
-                "question": question,
-                "context": context
-            },
-            "options": {"wait_for_model": True}
-        }
-    )
-    if response.status_code != 200:
-        raise HTTPException(500, "QA API error")
-    return response.json()
+    try:
+        response = requests.post(
+            "https://api-inference.huggingface.co/models/bert-large-uncased-whole-word-masking-finetuned-squad",
+            headers=API_HEADERS,
+            json={
+                "inputs": {
+                    "question": question,
+                    "context": context
+                },
+                "options": {"wait_for_model": True}
+            }
+        )
+        if response.status_code != 200:
+            raise HTTPException(500, f"QA API error: {response.text}")
+        return response.json()
+    except Exception as e:
+        logger.error(f"QA API error: {str(e)}")
+        raise HTTPException(500, f"QA API error: {str(e)}")
 
 # ----------API Ends------------------------------------------------
 
@@ -153,15 +168,15 @@ async def ask_question(payload: dict = Body(...)):
 # Extracting text from Given PDF to TEMP pdf
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
-    if file.content_type != 'application/pdf':
-        raise HTTPException(400, "Invalid file type")
-    
-    with tempfile.NamedTemporaryFile(delete=False) as temp_pdf:
-        content = await file.read()
-        temp_pdf.write(content)
-        temp_pdf_path = temp_pdf.name
-
     try:
+        if file.content_type != 'application/pdf':
+            raise HTTPException(400, "Invalid file type")
+        
+        with tempfile.NamedTemporaryFile(delete=False) as temp_pdf:
+            content = await file.read()
+            temp_pdf.write(content)
+            temp_pdf_path = temp_pdf.name
+
         text = ""
         # Using pdfplumber instead of PyPDF2
         with pdfplumber.open(temp_pdf_path) as pdf:
@@ -173,9 +188,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         os.unlink(temp_pdf_path)
         return {"text": text.strip()}
     except Exception as e:
-        os.unlink(temp_pdf_path)
+        if 'temp_pdf_path' in locals() and os.path.exists(temp_pdf_path):
+            os.unlink(temp_pdf_path)
         logger.error(f"Error processing PDF: {str(e)}")
         raise HTTPException(500, f"Error processing PDF: {str(e)}")
-    finally:
-        if os.path.exists(temp_pdf_path):
-            os.unlink(temp_pdf_path)
