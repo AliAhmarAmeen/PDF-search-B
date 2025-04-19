@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 import tempfile
 import logging
 import sys
+import re
 
 # Configure logging properly for Railway
 logging.basicConfig(
@@ -120,6 +121,22 @@ def hf_qa_api(context: str, question: str) -> dict:
 
 # ----------API Ends------------------------------------------------
 
+# Helper Function
+def clean_text(text):
+    # Remove excessive newlines and spaces
+    text = re.sub(r'\n+', '\n', text)  # Consolidate multiple newlines into a single newline
+    text = text.strip()  # Remove leading/trailing spaces
+    text = re.sub(r'\s{2,}', ' ', text)  # Replace multiple spaces with a single space
+    return text
+
+def format_text_as_html(text):
+    formatted_text = "<p>" + text.replace("\n", "</p><p>") + "</p>"
+    return formatted_text
+
+def split_text_into_paragraphs(text):
+    paragraphs = re.split(r'(?<=\.)\s+', text)  # Split text into sentences/paragraphs by periods followed by space
+    return paragraphs
+
 # Helper Functions
 def find_relevant_chunks(context: str, question: str, top_k: int = 3) -> list:
     chunks = [p.strip() for p in context.split('\n\n') if len(p.strip()) > 50]
@@ -182,6 +199,33 @@ async def ask_question(payload: dict = Body(...)):
 
 
 # Extracting text from Given PDF to TEMP pdf
+# @app.post("/upload")
+# async def upload_pdf(file: UploadFile = File(...)):
+#     try:
+#         if file.content_type != 'application/pdf':
+#             raise HTTPException(400, "Invalid file type")
+        
+#         with tempfile.NamedTemporaryFile(delete=False) as temp_pdf:
+#             content = await file.read()
+#             temp_pdf.write(content)
+#             temp_pdf_path = temp_pdf.name
+
+#         text = ""
+#         # Using pdfplumber instead of PyPDF2
+#         with pdfplumber.open(temp_pdf_path) as pdf:
+#             for page in pdf.pages:
+#                 page_text = page.extract_text()
+#                 if page_text:  # Handle empty pages
+#                     text += page_text + "\n\n"
+        
+#         os.unlink(temp_pdf_path)
+#         return {"text": text.strip()}
+#     except Exception as e:
+#         if 'temp_pdf_path' in locals() and os.path.exists(temp_pdf_path):
+#             os.unlink(temp_pdf_path)
+#         logger.error(f"Error processing PDF: {str(e)}")
+#         raise HTTPException(500, f"Error processing PDF: {str(e)}")
+    
 @app.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
     try:
@@ -200,15 +244,19 @@ async def upload_pdf(file: UploadFile = File(...)):
                 page_text = page.extract_text()
                 if page_text:  # Handle empty pages
                     text += page_text + "\n\n"
+
+        cleaned_text = clean_text(text)
+        formatted_text = format_text_as_html(cleaned_text)
         
         os.unlink(temp_pdf_path)
-        return {"text": text.strip()}
+        return {"text": formatted_text}
     except Exception as e:
         if 'temp_pdf_path' in locals() and os.path.exists(temp_pdf_path):
             os.unlink(temp_pdf_path)
         logger.error(f"Error processing PDF: {str(e)}")
         raise HTTPException(500, f"Error processing PDF: {str(e)}")
-    
+
+
 # ----------------------------------------------------------------
 
 @app.get("/")
